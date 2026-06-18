@@ -85,6 +85,30 @@ RUN \
     /var/tmp/* \
     /tmp/*
 
+# Install the wlroots screencast stack that Steam Remote Play needs to capture
+# the desktop. The base image's default compositor (labwc) does NOT advertise
+# zwlr_screencopy_manager_v1, so the xdg-desktop-portal ScreenCast backend has
+# nothing to grab frames from -> Steam Remote Play authenticates the Steam Link
+# but streams no video. We install cage (a wlroots kiosk compositor that DOES
+# support wlr-screencopy) plus the PipeWire + portal daemons. The session
+# startup (root/defaults/startwm_wayland.sh) launches cage + this stack instead
+# of labwc; see root/custom-cont-init.d/01-steam-remoteplay for the runtime
+# path bridging and root/usr/bin/steam-kiosk for the session entrypoint.
+RUN \
+  echo "**** install cage + pipewire screencast stack ****" && \
+  apt-get update && \
+  apt-get install -y --no-install-recommends \
+    cage \
+    dbus-x11 \
+    pipewire \
+    pipewire-audio-client-libraries \
+    wireplumber \
+    xdg-desktop-portal \
+    xdg-desktop-portal-wlr && \
+  echo "**** cleanup ****" && \
+  apt-get autoclean && \
+  rm -rf /var/lib/apt/lists/*
+
 # add local files
 COPY /root /
 

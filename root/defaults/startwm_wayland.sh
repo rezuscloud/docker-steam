@@ -38,5 +38,10 @@ export XCURSOR_THEME=breeze_cursors
 export XCURSOR_SIZE=24
 export XKB_DEFAULT_LAYOUT=us
 export XKB_DEFAULT_RULES=evdev
-export WAYLAND_DISPLAY=wayland-1
-labwc > /dev/null 2>&1
+# cage is a wlroots kiosk compositor. Unlike labwc it advertises
+# zwlr_screencopy_manager_v1, which xdg-desktop-portal-wlr needs to capture
+# frames for Steam Remote Play. cage runs a single app fullscreen; we run
+# steam-kiosk, which starts the PipeWire/portal stack then launches Steam.
+# WAYLAND_DISPLAY is left to cage's default (wayland-0).
+export WAYLAND_DISPLAY=wayland-0
+exec cage -- /usr/bin/steam-kiosk

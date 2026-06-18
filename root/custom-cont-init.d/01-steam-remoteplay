@@ -1,0 +1,22 @@
+#!/command/with-contenv bash
+# shellcheck shell=bash
+#
+# Bridge Steam's pressure-vessel sandbox runtime path to the image's live
+# session dir. The base image runs the Wayland session with
+# XDG_RUNTIME_DIR=/config/.XDG, but Steam's sandbox rewrites it to
+# /run/user/1000 (the systemd/FHS standard) and looks for the PipeWire socket
+# and the Wayland display there. Without this bridge, Steam cannot find the
+# capture stack even after it's running.
+#
+# /run is tmpfs (wiped each boot) so this runs every cont-init.
+set -e
+
+if [ -e /run/user/1000 ] && [ ! -L /run/user/1000 ]; then
+  echo "[steam-remoteplay] /run/user/1000 exists and is not a symlink; leaving as-is"
+else
+  echo "[steam-remoteplay] bridging /run/user/1000 -> /config/.XDG"
+  mkdir -p /config/.XDG
+  chown abc:abc /config/.XDG
+  rm -rf /run/user/1000
+  ln -s /config/.XDG /run/user/1000
+fi

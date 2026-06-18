@@ -1,0 +1,78 @@
+#!/command/with-contenv bash
+# shellcheck shell=bash
+#
+# cage kiosk entrypoint: starts the wlroots screencast stack (so Steam Remote
+# Play can capture the desktop) and then launches Steam. cage runs this script
+# as the session user (abc) once it has created its Wayland display, so we
+# inherit WAYLAND_DISPLAY/XDG_RUNTIME_DIR/DISPLAY from the cage process.
+#
+# Dependency order matters: dbus-session -> pipewire -> wireplumber ->
+# xdg-desktop-portal-wlr -> xdg-desktop-portal -> steam.
+set -u
+
+# Selkies joystick interposer + fake udev (same as wrapped-steam).
+export LD_PRELOAD="/usr/lib/selkies_joystick_interposer.so:/usr/lib/libudev.so.1.0.0-fake:/usr/lib/selkies_joystick_interposer_32.so:/usr/lib/libudev.so.1.0.0-fake_32"
+
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/config/.XDG}"
+export WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-wayland-0}"
+export DISPLAY="${DISPLAY:-:0}"
+export XDG_CONFIG_HOME="${HOME}/.config"
+mkdir -p "$XDG_RUNTIME_DIR" "$XDG_CONFIG_HOME"
+
+# cage creates wayland-0, but the base image's Selkies browser-capture service
+# and init-selkies-config expect WAYLAND_DISPLAY=wayland-1. Symlink wayland-1
+# -> wayland-0 so both names resolve to cage (keeps the :3001 web desktop
+# working alongside Steam Remote Play).
+if [ -S "${XDG_RUNTIME_DIR}/wayland-0" ]; then
+  rm -f "${XDG_RUNTIME_DIR}/wayland-1" "${XDG_RUNTIME_DIR}/wayland-1.lock"
+  ln -s wayland-0 "${XDG_RUNTIME_DIR}/wayland-1"
+fi
+
+# Stable session bus address (portals + pipewire clients depend on it).
+export DBUS_SESSION_BUS_ADDRESS="unix:path=${XDG_RUNTIME_DIR}/bus"
+uid="$(id -u)"
+
+log() { echo "[steam-kiosk] $*"; }
+
+# 1. D-Bus session bus.
+if ! pgrep -u "$uid" -f "dbus-daemon.*${XDG_RUNTIME_DIR}/bus" >/dev/null 2>&1; then
+  log "starting D-Bus session bus"
+  dbus-daemon --session --address="$DBUS_SESSION_BUS_ADDRESS" --nofork --nopidfile &
+  sleep 1
+fi
+
+# 2. PipeWire + WirePlumber.
+if ! pgrep -u "$uid" -x pipewire >/dev/null 2>&1; then
+  log "starting pipewire"
+  setsid pipewire >"${XDG_RUNTIME_DIR}/pipewire.log" 2>&1 &
+  sleep 2
+fi
+if ! pgrep -u "$uid" -x wireplumber >/dev/null 2>&1; then
+  log "starting wireplumber"
+  setsid wireplumber >"${XDG_RUNTIME_DIR}/wireplumber.log" 2>&1 &
+  sleep 3
+fi
+
+# 3. ScreenCast portal backend (xdg-desktop-portal-wlr talks to cage via
+#    wlr-screencopy and exposes the PipeWire video node Steam reads). The
+#    frontend (xdg-desktop-portal) exposes the org.freedesktop.portal.ScreenCast
+#    D-Bus name Steam queries.
+if [ ! -f "${XDG_CONFIG_HOME}/xdg-desktop-portal-wlr.conf" ]; then
+  printf '[screencast]\nmax_fps=60\nenable_cursor_capture=true\n' \
+    > "${XDG_CONFIG_HOME}/xdg-desktop-portal-wlr.conf"
+fi
+if ! pgrep -u "$uid" -f xdg-desktop-portal-wlr >/dev/null 2>&1; then
+  log "starting xdg-desktop-portal-wlr"
+  setsid /usr/libexec/xdg-desktop-portal-wlr >"${XDG_RUNTIME_DIR}/xdpw.log" 2>&1 &
+  sleep 2
+fi
+if ! pgrep -u "$uid" -x xdg-desktop-portal >/dev/null 2>&1; then
+  log "starting xdg-desktop-portal"
+  setsid /usr/libexec/xdg-desktop-portal >"${XDG_RUNTIME_DIR}/xdp.log" 2>&1 &
+  sleep 3
+fi
+
+# 4. Steam (the Remote Play host). --ozone-platform=wayland so it renders on the
+#    cage surface; Steam's PipeWire capture backend will find the portal above.
+log "launching steam"
+exec /usr/bin/steam --ozone-platform=wayland "$@"
