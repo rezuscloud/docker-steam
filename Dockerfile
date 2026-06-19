@@ -106,12 +106,17 @@ RUN \
     xdg-desktop-portal \
     xdg-desktop-portal-wlr \
     hwdata && \
-  echo "**** portal config: route ScreenCast to xdg-desktop-portal-wlr ****" && \
-  printf '[portal]\nDBusName=org.freedesktop.impl.portal.desktop.wlr\nInterfaces=org.freedesktop.impl.portal.ScreenCast;org.freedesktop.impl.portal.RemoteDesktop\n' > /usr/share/xdg-desktop-portal/portals/wlr.portal && \
-  printf '[preferred]\ndefault=wlr;gtk\n' > /etc/xdg-desktop-portal/portals.conf && \
-  echo "**** cleanup ****" && \
   apt-get autoclean && \
   rm -rf /var/lib/apt/lists/*
+
+# Portal config: route ScreenCast requests to the wlr backend (which captures
+# gamescope's Wayland output via wlr-export-dmabuf and exposes it as a PipeWire
+# stream that Steam Remote Play reads).
+RUN mkdir -p /usr/share/xdg-desktop-portal/portals /etc/xdg-desktop-portal && \
+    printf '[portal]\nDBusName=org.freedesktop.impl.portal.desktop.wlr\nInterfaces=org.freedesktop.impl.portal.ScreenCast;org.freedesktop.impl.portal.RemoteDesktop\n' \
+      > /usr/share/xdg-desktop-portal/portals/wlr.portal && \
+    printf '[preferred]\ndefault=wlr;gtk\n' \
+      > /etc/xdg-desktop-portal/portals.conf
 
 # ports and volumes
 EXPOSE 3001
