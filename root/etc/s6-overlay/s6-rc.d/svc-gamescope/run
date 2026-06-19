@@ -46,12 +46,27 @@ rm -f /tmp/.X11-unix/* 2>/dev/null
 # Clean stale sockets (the /config PVC persists them across restarts).
 rm -f "${XDG_RUNTIME_DIR}"/gamescope-* "${XDG_RUNTIME_DIR}"/wayland-* 2>/dev/null || true
 
-# gamescope is both the compositor and the capture source. Its child is a
-# wrapper that opens X11 auth (xhost +local:) then drops to `abc` for Steam
-# (Steam refuses root; Xwayland is created by root so auth must be opened).
-exec /usr/games/gamescope \
+# gamescope creates its socket as "gamescope-0", but Steam's pressure-vessel
+# sandbox hardcodes WAYLAND_DISPLAY=wayland-0. Launch gamescope in the
+# background, wait for gamescope-0, then symlink wayland-0 -> gamescope-0 so
+# the sandboxed streaming subprocess can find the compositor.
+/usr/games/gamescope \
   --backend drm \
   -O "${CONNECTOR}" \
   -W "${WIDTH}" -H "${HEIGHT}" -r "${REFRESH}" \
   --steam \
-  -- /usr/bin/gamescope-steam-wrapper
+  -- /usr/bin/gamescope-steam-wrapper &
+GSPID=$!
+
+# Wait for gamescope-0 then create the wayland-0 compatibility symlink.
+for i in $(seq 1 40); do
+  [ -S "${XDG_RUNTIME_DIR}/gamescope-0" ] && break
+  sleep 0.25
+done
+if [ -S "${XDG_RUNTIME_DIR}/gamescope-0" ]; then
+  ln -sf gamescope-0 "${XDG_RUNTIME_DIR}/wayland-0"
+  echo "[svc-gamescope] symlinked wayland-0 -> gamescope-0"
+fi
+
+wait "$GSPID"
+
