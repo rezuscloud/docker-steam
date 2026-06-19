@@ -88,6 +88,26 @@ RUN \
 # add local files
 COPY /root /
 
+# Install gamescope + the PipeWire capture stack needed for Steam Remote Play
+# to capture the desktop when driving a real HDMI display. The base image's
+# default Wayland session (labwc on the render node) produces no capturable
+# scanout, so Steam authenticates the Steam Link but streams no video. gamescope
+# with the DRM backend drives a physical display (HDMI-A-*) and exposes a
+# PipeWire stream Steam's capture reads. libei handles input (no uinput needed).
+# See root/custom-services.d/svc-gamescope for the runtime wiring.
+RUN \
+  echo "**** install gamescope + pipewire capture stack ****" && \
+  apt-get update && \
+  apt-get install -y --no-install-recommends \
+    gamescope \
+    pipewire \
+    wireplumber \
+    pipewire-audio \
+    hwdata && \
+  echo "**** cleanup ****" && \
+  apt-get autoclean && \
+  rm -rf /var/lib/apt/lists/*
+
 # ports and volumes
 EXPOSE 3001
 

@@ -1,0 +1,19 @@
+#!/usr/bin/with-contenv bash
+# shellcheck shell=bash
+# PipeWire daemon (gamescope's capture backend). Runs as `abc` so it shares the
+# session bus gamescope + Steam connect to.
+set -u
+export HOME=/config
+export XDG_RUNTIME_DIR=/config/.XDG
+mkdir -p "${XDG_RUNTIME_DIR}"
+chown abc:abc "${XDG_RUNTIME_DIR}"
+
+# A session D-Bus is required for PipeWire clients. Start one if absent.
+export DBUS_SESSION_BUS_ADDRESS="unix:path=${XDG_RUNTIME_DIR}/bus"
+if ! pgrep -u "$(id -u abc)" -f "dbus-daemon.*${XDG_RUNTIME_DIR}/bus" >/dev/null 2>&1; then
+  s6-setuidgid abc dbus-daemon --session \
+    --address="${DBUS_SESSION_BUS_ADDRESS}" --nofork --nopidfile &
+  sleep 1
+fi
+
+exec s6-setuidgid abc pipewire

@@ -1,0 +1,50 @@
+#!/usr/bin/with-contenv bash
+# shellcheck shell=bash
+#
+# s6 longrun: gamescope driving the real HDMI display, with Steam as its child.
+#
+# Runs as ROOT (DRM master requires root; the privileged container grants it).
+# gamescope's builtin seatd acquires the seat without systemd logind. Steam is
+# launched as `abc` via runuser so game state/ownership on the /config PVC is
+# preserved.
+#
+# Configuration via env (defaults shown):
+#   STEAM_GAMESCOPE_CONNECTOR=HDMI-A-2   DRM connector to drive
+#   STEAM_GAMESCOPE_WIDTH=1600           output width
+#   STEAM_GAMESCOPE_HEIGHT=900           output height
+#   STEAM_GAMESCOPE_REFRESH=60           output refresh rate
+
+set -u
+
+CONNECTOR="${STEAM_GAMESCOPE_CONNECTOR:-HDMI-A-2}"
+WIDTH="${STEAM_GAMESCOPE_WIDTH:-1600}"
+HEIGHT="${STEAM_GAMESCOPE_HEIGHT:-900}"
+REFRESH="${STEAM_GAMESCOPE_REFRESH:-60}"
+export PATH="/usr/games:/usr/bin:/bin:/usr/sbin:${PATH}"
+export WLR_LIBINPUT_NO_DEVICES=1
+export HOME=/config
+export XDG_RUNTIME_DIR=/config/.XDG
+unset WAYLAND_DISPLAY DISPLAY
+
+# gamescope must own /tmp/.X11-unix for its Xwayland, else it errors out.
+mkdir -p /tmp/.X11-unix
+chown root:root /tmp/.X11-unix
+chmod 1777 /tmp/.X11-unix
+rm -f /tmp/.X11-unix/* 2>/dev/null
+
+# Clean stale sockets (the /config PVC persists them across restarts).
+rm -f "${XDG_RUNTIME_DIR}"/gamescope-* "${XDG_RUNTIME_DIR}"/wayland-* 2>/dev/null || true
+
+# gamescope's child: drop to `abc` and launch Steam Big Picture on the
+# gamescope Wayland display. gamescope supervises this child; when Steam exits,
+# gamescope exits (and s6 restarts this service).
+exec /usr/games/gamescope \
+  --backend drm \
+  -O "${CONNECTOR}" \
+  -W "${WIDTH}" -H "${HEIGHT}" -r "${REFRESH}" \
+  --steam \
+  -- /usr/sbin/runuser -u abc -- \
+    env HOME=/config XDG_RUNTIME_DIR=/config/.XDG \
+        WAYLAND_DISPLAY=gamescope-0 \
+        LD_PRELOAD=/usr/lib/selkies_joystick_interposer.so:/usr/lib/libudev.so.1.0.0-fake:/usr/lib/selkies_joystick_interposer_32.so:/usr/lib/libudev.so.1.0.0-fake_32 \
+    /usr/bin/steam -bigpicture
