@@ -35,6 +35,9 @@ export PATH="/usr/games:/usr/bin:/bin:/usr/sbin:${PATH}"
 export WLR_LIBINPUT_NO_DEVICES=1
 export HOME=/config
 export XDG_RUNTIME_DIR=/config/.XDG
+# Explicit session bus (gamescope registers its ScreenCast portal here; Steam
+# queries it to discover the capture stream). Must match svc-pipewire's address.
+export DBUS_SESSION_BUS_ADDRESS="unix:path=${XDG_RUNTIME_DIR}/bus"
 unset WAYLAND_DISPLAY DISPLAY
 
 # gamescope must own /tmp/.X11-unix for its Xwayland, else it errors out.
