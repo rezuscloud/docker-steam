@@ -4,6 +4,18 @@
 # (gamescope). Captures the Wayland output via wlr-export-dmabuf and exposes it
 # as a PipeWire stream that Steam Remote Play's CDesktopCapturePipeWire reads.
 set -u
+
+# Source container_environment then override (s6's with-contenv clobbers exports).
+[ -d /run/s6/container_environment ] && for f in /run/s6/container_environment/*; do
+  [ -f "$f" ] && export "$(basename "$f")=$(cat "$f")"
+done
+
+# Persist our overrides so children inherit.
+mkdir -p /run/s6/container_environment
+printf '%s' /config/.XDG > /run/s6/container_environment/XDG_RUNTIME_DIR
+printf '%s' 'unix:path=/config/.XDG/bus' > /run/s6/container_environment/DBUS_SESSION_BUS_ADDRESS
+printf '%s' gamescope-0 > /run/s6/container_environment/WAYLAND_DISPLAY
+
 export HOME=/config
 export XDG_RUNTIME_DIR=/config/.XDG
 export DBUS_SESSION_BUS_ADDRESS="unix:path=${XDG_RUNTIME_DIR}/bus"
