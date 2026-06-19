@@ -1,4 +1,4 @@
-#!/usr/bin/with-contenv bash
+#!/bin/bash
 # shellcheck shell=bash
 # PipeWire daemon (gamescope's capture backend). Runs as `abc` so it shares the
 # session bus gamescope + Steam connect to.

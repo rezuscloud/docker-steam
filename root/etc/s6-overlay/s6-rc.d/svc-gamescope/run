@@ -1,4 +1,4 @@
-#!/usr/bin/with-contenv bash
+#!/bin/bash
 # shellcheck shell=bash
 #
 # s6 longrun: gamescope driving the real HDMI display, with Steam as its child.
@@ -15,6 +15,17 @@
 #   STEAM_GAMESCOPE_REFRESH=60           output refresh rate
 
 set -u
+
+# s6's with-contenv shebang restores /run/s6/container_environment which would
+# clobber our exports. We source the container env explicitly then override.
+[ -d /run/s6/container_environment ] && for f in /run/s6/container_environment/*; do
+  [ -f "$f" ] && export "$(basename "$f")=$(cat "$f")"
+done
+
+# Persist our overrides into the container env too (so children inherit).
+mkdir -p /run/s6/container_environment
+printf '%s' /config/.XDG > /run/s6/container_environment/XDG_RUNTIME_DIR
+printf '%s' 1 > /run/s6/container_environment/WLR_LIBINPUT_NO_DEVICES
 
 CONNECTOR="${STEAM_GAMESCOPE_CONNECTOR:-HDMI-A-2}"
 WIDTH="${STEAM_GAMESCOPE_WIDTH:-1600}"
