@@ -46,16 +46,16 @@ rm -f /tmp/.X11-unix/* 2>/dev/null
 # Clean stale sockets (the /config PVC persists them across restarts).
 rm -f "${XDG_RUNTIME_DIR}"/gamescope-* "${XDG_RUNTIME_DIR}"/wayland-* 2>/dev/null || true
 
-# gamescope's child: drop to `abc` and launch Steam Big Picture on the
-# gamescope Wayland display. gamescope supervises this child; when Steam exits,
-# gamescope exits (and s6 restarts this service).
+# gamescope's child: launch Steam Big Picture directly. We run as root (same
+# as gamescope itself) so the Xwayland auth cookie is inherited - using
+# runuser to drop to `abc` breaks X11 auth ("Authorization required, but no
+# authorization protocol specified"). The /config PVC is root-accessible.
 exec /usr/games/gamescope \
   --backend drm \
   -O "${CONNECTOR}" \
   -W "${WIDTH}" -H "${HEIGHT}" -r "${REFRESH}" \
   --steam \
-  -- /usr/sbin/runuser -u abc -- \
-    env HOME=/config XDG_RUNTIME_DIR=/config/.XDG \
-        WAYLAND_DISPLAY=gamescope-0 \
-        LD_PRELOAD=/usr/lib/selkies_joystick_interposer.so:/usr/lib/libudev.so.1.0.0-fake:/usr/lib/selkies_joystick_interposer_32.so:/usr/lib/libudev.so.1.0.0-fake_32 \
-    /usr/bin/steam -bigpicture
+  -- env HOME=/config XDG_RUNTIME_DIR=/config/.XDG \
+       WAYLAND_DISPLAY=gamescope-0 \
+       LD_PRELOAD=/usr/lib/selkies_joystick_interposer.so:/usr/lib/libudev.so.1.0.0-fake:/usr/lib/selkies_joystick_interposer_32.so:/usr/lib/libudev.so.1.0.0-fake_32 \
+     /usr/bin/steam -bigpicture
