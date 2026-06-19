@@ -1,0 +1,24 @@
+#!/bin/bash
+# shellcheck shell=bash
+# xdg-desktop-portal-wlr: ScreenCast portal backend for wlroots compositors
+# (gamescope). Captures the Wayland output via wlr-export-dmabuf and exposes it
+# as a PipeWire stream that Steam Remote Play's CDesktopCapturePipeWire reads.
+set -u
+export HOME=/config
+export XDG_RUNTIME_DIR=/config/.XDG
+export DBUS_SESSION_BUS_ADDRESS="unix:path=${XDG_RUNTIME_DIR}/bus"
+export WAYLAND_DISPLAY=gamescope-0
+mkdir -p "${XDG_RUNTIME_DIR}"
+
+# Wait for the gamescope Wayland socket.
+for i in $(seq 1 40); do
+  [ -S "${XDG_RUNTIME_DIR}/gamescope-0" ] && break
+  sleep 0.25
+done
+
+# Config: single output, 60fps max, cursor capture on.
+mkdir -p "${HOME}/.config"
+[ -f "${HOME}/.config/xdg-desktop-portal-wlr.conf" ] || \
+  printf '[screencast]\nmax_fps=60\nenable_cursor_capture=true\n' > "${HOME}/.config/xdg-desktop-portal-wlr.conf"
+
+exec s6-setuidgid abc /usr/libexec/xdg-desktop-portal-wlr

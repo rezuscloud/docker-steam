@@ -103,7 +103,12 @@ RUN \
     pipewire \
     wireplumber \
     pipewire-audio \
+    xdg-desktop-portal \
+    xdg-desktop-portal-wlr \
     hwdata && \
+  echo "**** portal config: route ScreenCast to xdg-desktop-portal-wlr ****" && \
+  printf '[portal]\nDBusName=org.freedesktop.impl.portal.desktop.wlr\nInterfaces=org.freedesktop.impl.portal.ScreenCast;org.freedesktop.impl.portal.RemoteDesktop\n' > /usr/share/xdg-desktop-portal/portals/wlr.portal && \
+  printf '[preferred]\ndefault=wlr;gtk\n' > /etc/xdg-desktop-portal/portals.conf && \
   echo "**** cleanup ****" && \
   apt-get autoclean && \
   rm -rf /var/lib/apt/lists/*
