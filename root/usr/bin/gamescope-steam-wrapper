@@ -1,0 +1,32 @@
+#!/bin/bash
+# shellcheck shell=bash
+#
+# gamescope child wrapper. gamescope runs this as root (for DRM master); this
+# script opens X11 auth to local users, then drops to `abc` for Steam (which
+# refuses to run as root).
+#
+# gamescope -> [this wrapper, root] -> xhost +local: -> runuser abc -> steam
+
+export HOME=/config
+export XDG_RUNTIME_DIR=/config/.XDG
+export PATH="/usr/games:/usr/bin:/bin:/usr/sbin:${PATH}"
+
+# Wait for Xwayland to be ready (gamescope creates it asynchronously).
+export DISPLAY=:0
+for i in $(seq 1 20); do
+  if xdpyinfo >/dev/null 2>&1; then break; fi
+  sleep 0.5
+done
+
+# Allow local UID connections so `abc` can use root's Xwayland.
+xhost +local: >/dev/null 2>&1 || true
+
+# Drop to abc and run Steam. Steam refuses root ("Cannot run as root user").
+exec runuser -u abc -- \
+  env \
+    HOME=/config \
+    XDG_RUNTIME_DIR=/config/.XDG \
+    DISPLAY=:0 \
+    WAYLAND_DISPLAY=gamescope-0 \
+    LD_PRELOAD=/usr/lib/selkies_joystick_interposer.so:/usr/lib/libudev.so.1.0.0-fake:/usr/lib/selkies_joystick_interposer_32.so:/usr/lib/libudev.so.1.0.0-fake_32 \
+  /usr/bin/steam -bigpicture
