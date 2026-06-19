@@ -50,12 +50,14 @@ rm -f "${XDG_RUNTIME_DIR}"/gamescope-* "${XDG_RUNTIME_DIR}"/wayland-* 2>/dev/nul
 # sandbox hardcodes WAYLAND_DISPLAY=wayland-0. Launch gamescope in the
 # background, wait for gamescope-0, then symlink wayland-0 -> gamescope-0 so
 # the sandboxed streaming subprocess can find the compositor.
+# Output goes to a PVC log file for diagnosis (s6 logger not used by this base).
+mkdir -p /config/logs
 /usr/games/gamescope \
   --backend drm \
   -O "${CONNECTOR}" \
   -W "${WIDTH}" -H "${HEIGHT}" -r "${REFRESH}" \
   --steam \
-  -- /usr/bin/gamescope-steam-wrapper &
+  -- /usr/bin/gamescope-steam-wrapper > /config/logs/gamescope.log 2>&1 &
 GSPID=$!
 
 # Wait for gamescope-0 then create the wayland-0 compatibility symlink.
