@@ -1,19 +1,35 @@
 #!/bin/bash
 # shellcheck shell=bash
-# PipeWire daemon (gamescope's capture backend). Runs as `abc` so it shares the
-# session bus gamescope + Steam connect to.
+# PipeWire daemon (gamescope's capture backend). PipeWire + its clients (Steam,
+# gamescope) need a D-Bus SESSION bus to discover each other and the capture
+# stream. This service starts the session bus first, then pipewire, all as `abc`
+# so they share UID/credentials.
 set -u
+
 export HOME=/config
 export XDG_RUNTIME_DIR=/config/.XDG
 mkdir -p "${XDG_RUNTIME_DIR}"
 chown abc:abc "${XDG_RUNTIME_DIR}"
 
-# A session D-Bus is required for PipeWire clients. Start one if absent.
+# Stable session bus address. Must match what gamescope + Steam inherit.
 export DBUS_SESSION_BUS_ADDRESS="unix:path=${XDG_RUNTIME_DIR}/bus"
+
+# Start the session D-Bus as abc if not already running. PipeWire's mod.portal
+# + mod.rt REQUIRE it; without it pipewire logs "No existing session bus was
+# found" and Steam's PipeWire capture times out.
 if ! pgrep -u "$(id -u abc)" -f "dbus-daemon.*${XDG_RUNTIME_DIR}/bus" >/dev/null 2>&1; then
   s6-setuidgid abc dbus-daemon --session \
     --address="${DBUS_SESSION_BUS_ADDRESS}" --nofork --nopidfile &
-  sleep 1
+  # Wait for the socket to appear.
+  for i in $(seq 1 20); do
+    [ -S "${XDG_RUNTIME_DIR}/bus" ] && break
+    sleep 0.25
+  done
 fi
 
-exec s6-setuidgid abc pipewire
+# Persist into container_environment so children (gamescope, Steam via wrapper)
+# inherit the SAME bus address - critical for portal/discovery to work.
+mkdir -p /run/s6/container_environment
+printf '%s' "${DBUS_SESSION_BUS_ADDRESS}" > /run/s6/container_environment/DBUS_SESSION_BUS_ADDRESS
+
+exec s6-setuidgid abc env DBUS_SESSION_BUS_ADDRESS="${DBUS_SESSION_BUS_ADDRESS}" pipewire
