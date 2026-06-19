@@ -1,0 +1,7 @@
+#!/usr/bin/with-contenv bash
+# shellcheck shell=bash
+# Logger for svc-gamescope. s6 feeds the service's stdout+stderr to this script
+# via stdin; s6-log writes rotating logs to /config/logs/svc-gamescope (PVC, so
+# they persist and are readable via kubectl exec).
+mkdir -p /config/logs/svc-gamescope
+exec s6-log -b n10 s1000000 /config/logs/svc-gamescope

@@ -1,0 +1,4 @@
+#!/usr/bin/with-contenv bash
+# shellcheck shell=bash
+mkdir -p /config/logs/svc-pipewire
+exec s6-log -b n10 s1000000 /config/logs/svc-pipewire
